@@ -1,0 +1,42 @@
+#!/usr/bin/env python
+""" Wrap clion's bazel usage so can we pass a custom aspect implementation. """
+from __future__ import print_function
+import os
+import sys
+
+def filter_bazel_plugin_debugging_extra_options(args):
+    return [arg for arg in args if arg not in ["--copt=-g", "--dynamic_mode=off", "--fission=yes"]]
+
+
+def replace_plugin_aspect(args):
+    """ Replaces the builtin plugin aspect with our custom aspect """
+    old_magic = "--aspects=@intellij_aspect//:intellij_info_bundled.bzl%intellij_info_aspect"
+    new_magic = "--aspects=@bazel_issues//clion:aspect.bzl%intellij_info_aspect"
+    return [new_magic if arg == old_magic else arg for arg in args]
+
+
+def remove_invalid_test_strategy(args):
+    """ Removes an option the plugin automatically adds which is invalid in bazel 0.22 """
+    def testing_strategy_local(arg):
+        return arg == '--test_strategy=local'
+    return [arg for arg in args if not testing_strategy_local(arg)]
+
+HACKS = [
+    replace_plugin_aspect,
+    remove_invalid_test_strategy,
+    filter_bazel_plugin_debugging_extra_options,
+]
+
+def hack_args(args):
+    """ Apply all HACKS to args"""
+    for hack in HACKS:
+        args = hack(args)
+    return list(args)
+
+
+def main(args):
+    os.execvp("bazel", ["bazel"] + hack_args(args))
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
